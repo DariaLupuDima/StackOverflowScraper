@@ -1,0 +1,63 @@
+# -----------------------------
+# Python
+# -----------------------------
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.pdb
+*.so
+
+# Virtual environments
+venv/
+env/
+.venv/
+ENV/
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# Jupyter + IPython
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# TextBlob cached data
+textblob_data/
+
+# -----------------------------
+# Data Files
+# -----------------------------
+data/*.csv
+data/*.json
+data/*.xlsx
+
+# Avoid ignoring the folder itself
+!data/
+!.gitkeep
+
+# -----------------------------
+# Plot outputs
+# -----------------------------
+*.png
+*.jpg
+*.jpeg
+*.svg
+*.pdf
+*.html
+
+# -----------------------------
+# IDE / Editor junk
+# -----------------------------
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# -----------------------------
+# System files
+# -----------------------------
+.DS_Store
+Thumbs.db
