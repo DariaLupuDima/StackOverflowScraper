@@ -35,33 +35,33 @@ The scraper collects StackOverflow questions whose titles contain a chosen keywo
 
 Once the CSV is populated, the analysis script loads the data and creates:
 
-### **1. Top 5 Questions by Score**
+### 1. Top 5 Questions by Score
 
 Interactive horizontal bar chart — clicking a bar opens the question.
 
-### **2. Top 5 Longest Question Titles**
+### 2. Top 5 Longest Question Titles
 
 Shows the most verbose/complex titles.
 
-### **3. Word Cloud**
+### 3. Word Cloud
 
 Highlights the most frequent words in all question titles.
 
-### **4. Author Activity Pie Chart**
+### 4. Author Activity Pie Chart
 
 Shows which authors appear most often in your dataset.
 
-### **5. Score Ranking (All Rows)**
+### 5. Score Ranking (All Rows)
 
 Full interactive score ranking chart.
 
-### **6. Sentiment Ranking (All Rows)**
+### 6. Sentiment Ranking (All Rows)
 
 Sentiment polarity extracted using TextBlob.
 
-### **7. Title Length vs Score Scatter Plot**
+### 7. Title Length vs Score Scatter Plot
 
-### **8. Sentiment vs Title Length Scatter Plot**
+### 8. Sentiment vs Title Length Scatter Plot
 
  Source file: `analyse_stack_plus.py`
 
@@ -104,19 +104,11 @@ pip install -r requirements.txt
 * numpy
 * plotly
 * wordcloud
-* ipython (for Markdown rendering)
 
-You may also need TextBlob language corpora:
-
-```bash
-python -m textblob.download_corpora
-```
-
----
 
 ##  Usage
 
-### **1. Run the scraper**
+### *. Run the scraper
 
 ```bash
 python keywordstack_scraper.py
@@ -136,7 +128,7 @@ data/stack_questions.csv
 
 ---
 
-### **2. Run the analysis**
+### 2. Run the analysis
 
 ```bash
 python analyse_stack_plus.py
@@ -145,7 +137,6 @@ python analyse_stack_plus.py
 All charts will open in your default browser.
 
 ✔ Hover over bars → see details
-✔ Click an item → open original StackOverflow link
 ✔ Fully interactive charts
 
 ---
@@ -160,17 +151,6 @@ All charts will open in your default browser.
 
 ---
 
-##  Future Improvements
-
-Here are some ideas for extending the project:
-
-* Multi-page API scraping
-* Save charts as PNG or HTML
-* NLP clustering or topic modeling
-* Include question tags in the dataset
-* Build a dashboard using Streamlit or Dash
-
----
 
 ##  Inspiration
 
