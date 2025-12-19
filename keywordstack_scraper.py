@@ -1,36 +1,101 @@
-import requests      # Sends HTTP requests to the StackExchange API
-import pandas as pd  # Stores, structures, and exports the scraped data
+import requests
+import pandas as pd
+import sqlite3
+from datetime import datetime
+import os
 
-# Ask the user for a keyword to filter StackOverflow questions.
-# This makes the scraper dynamic and allows targeted searches.
-keyword = input("Enter a keyword to scrape from StackOverflow: ")
+DB_PATH = "data/stack_questions.db"
+CSV_PATH = "data/stack_questions.csv"
 
-# Build the API request URL using the given keyword.
-# The API will return questions sorted by votes that contain the keyword in the title.
-url = (
-    "https://api.stackexchange.com/2.3/search?"
-    f"order=desc&sort=votes&intitle={keyword}&site=stackoverflow&pagesize=100"
-)
+def init_db():
+    os.makedirs("data", exist_ok=True)
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS questions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            keyword TEXT,
+            scraped_at TEXT,
+            title TEXT,
+            author TEXT,
+            score INTEGER,
+            url TEXT,
+            answer_count INTEGER,
+            is_answered INTEGER,
+            view_count INTEGER,
+            creation_date TEXT,
+            tags TEXT
+        )
+        """
+    )
+    conn.commit()
+    conn.close()
 
-# Send the GET request to StackOverflow and convert the response to a Python dictionary.
-response = requests.get(url)
-data = response.json()
+def scrape_keyword(keyword: str):
+    # build API url
+    url = (
+        "https://api.stackexchange.com/2.3/search?"
+        f"order=desc&sort=votes&intitle={keyword}"
+        "&site=stackoverflow&pagesize=100"
+    )
 
-# Extract relevant fields from each returned question.
-# We only keep: Title, Author name, Score, and the URL of the question.
-posts = []
-for item in data.get('items', []):
-    title = item.get('title', 'No title')
-    author = item.get('owner', {}).get('display_name', 'Anonymous')
-    score = item.get('score', 0)
-    link = item.get('link', '')
+    response = requests.get(url)
+    data = response.json()
 
-    posts.append([title, author, score, link])
+    posts = []
+    scraped_at = datetime.utcnow().isoformat()
 
-# Convert list into a DataFrame and export it as a CSV file.
-# This file will later be used for data analysis and visualizations.
-df = pd.DataFrame(posts, columns=['Title', 'Author', 'Score', 'URL'])
-df.to_csv('data/stack_questions.csv', index=False, encoding='utf-8')
+    for item in data.get("items", []):
+        title = item.get("title", "No title")
+        author = item.get("owner", {}).get("display_name", "Anonymous")
+        score = item.get("score", 0)
+        link = item.get("link", "")
+        answer_count = item.get("answer_count", 0)
+        is_answered = 1 if item.get("is_answered", False) else 0
+        view_count = item.get("view_count", 0)
+        creation_ts = item.get("creation_date")  # unix timestamp
+        creation_date = (
+            datetime.utcfromtimestamp(creation_ts).isoformat()
+            if creation_ts is not None else None
+        )
+        tags = ",".join(item.get("tags", []))
 
-# Inform the user that the scraping process is done.
-print(f" Scraped {len(df)} questions containing '{keyword}' and saved to data/stack_questions.csv")
+        posts.append([
+            keyword, scraped_at, title, author, score, link,
+            answer_count, is_answered, view_count, creation_date, tags
+        ])
+
+    # Updated column names to match the SQLite table schema
+    cols = [
+        "keyword",
+        "scraped_at",
+        "title",
+        "author",
+        "score",
+        "url",
+        "answer_count",
+        "is_answered",
+        "view_count",
+        "creation_date",
+        "tags"
+    ]
+    df = pd.DataFrame(posts, columns=cols)
+
+    # Save to CSV (for backward compatibility)
+    df.to_csv(CSV_PATH, index=False, encoding="utf-8")
+    print(f"Scraped {len(df)} questions → {CSV_PATH}")
+
+    # Save to SQLite
+    conn = sqlite3.connect(DB_PATH)
+    df.to_sql("questions", conn, if_exists="append", index=False)
+    conn.close()
+    print(f"Appended {len(df)} rows to {DB_PATH}")
+
+def main():
+    keyword = input("Enter a keyword to scrape from StackOverflow: ")
+    init_db()
+    scrape_keyword(keyword)
+
+if __name__ == "__main__":
+    main()
