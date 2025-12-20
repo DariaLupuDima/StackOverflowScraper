@@ -7,7 +7,8 @@ from wordcloud import WordCloud
 import matplotlib.pyplot as plt
 import io
 import base64
-
+import requests                     
+from datetime import datetime   
 from bokeh.embed import components
 from bokeh.plotting import figure
 from bokeh.models import ColumnDataSource, HoverTool, TapTool, OpenURL
@@ -18,6 +19,107 @@ import os
 DB_PATH = "data/stack_questions.db"
 
 app = Flask(__name__)
+
+# ============================================================
+# SCRAPER HELPERS (called from web app)
+# ============================================================
+def init_db():
+    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
+    cur.execute(
+        """
+        CREATE TABLE IF NOT EXISTS questions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            keyword TEXT,
+            scraped_at TEXT,
+            title TEXT,
+            author TEXT,
+            score INTEGER,
+            url TEXT,
+            answer_count INTEGER,
+            is_answered INTEGER,
+            view_count INTEGER,
+            creation_date TEXT,
+            tags TEXT
+        )
+        """
+    )
+    conn.commit()
+    conn.close()
+
+
+def reset_db():
+    """Delete the SQLite DB file (full reset)."""
+    if os.path.exists(DB_PATH):
+        os.remove(DB_PATH)
+        print("Database file removed.")
+
+
+def scrape_keyword(keyword: str):
+    """
+    Scrape StackOverflow via StackExchange API for a keyword
+    and append rows into the SQLite DB.
+    """
+    if not keyword:
+        return
+
+    # build API url
+    url = (
+        "https://api.stackexchange.com/2.3/search?"
+        f"order=desc&sort=votes&intitle={keyword}"
+        "&site=stackoverflow&pagesize=100"
+    )
+
+    response = requests.get(url)
+    data = response.json()
+
+    posts = []
+    scraped_at = datetime.utcnow().isoformat()
+
+    for item in data.get("items", []):
+        title = item.get("title", "No title")
+        author = item.get("owner", {}).get("display_name", "Anonymous")
+        score = item.get("score", 0)
+        link = item.get("link", "")
+        answer_count = item.get("answer_count", 0)
+        is_answered = 1 if item.get("is_answered", False) else 0
+        view_count = item.get("view_count", 0)
+        creation_ts = item.get("creation_date")  # unix timestamp
+        creation_date = (
+            datetime.utcfromtimestamp(creation_ts).isoformat()
+            if creation_ts is not None else None
+        )
+        tags = ",".join(item.get("tags", []))
+
+        posts.append([
+            keyword, scraped_at, title, author, score, link,
+            answer_count, is_answered, view_count, creation_date, tags
+        ])
+
+    if not posts:
+        return
+
+    cols = [
+        "keyword",
+        "scraped_at",
+        "title",
+        "author",
+        "score",
+        "url",
+        "answer_count",
+        "is_answered",
+        "view_count",
+        "creation_date",
+        "tags",
+    ]
+    df = pd.DataFrame(posts, columns=cols)
+
+    conn = sqlite3.connect(DB_PATH)
+    df.to_sql("questions", conn, if_exists="append", index=False)
+    conn.close()
+    print(f"Scraped {len(df)} questions for '{keyword}'")
+
 
 
 # ============================================================
@@ -33,17 +135,25 @@ def load_data(keyword: str) -> pd.DataFrame:
 
 
 def get_keyword_history(limit: int = 30):
-    conn = sqlite3.connect(DB_PATH)
-    query = """
-        SELECT keyword, MAX(scraped_at) AS last_seen
-        FROM questions
-        GROUP BY keyword
-        ORDER BY datetime(last_seen) DESC
-        LIMIT ?
-    """
-    df = pd.read_sql_query(query, conn, params=[limit])
-    conn.close()
-    return df["keyword"].tolist()
+    if not os.path.exists(DB_PATH):
+        return []
+
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        query = """
+            SELECT keyword, MAX(scraped_at) AS last_seen
+            FROM questions
+            GROUP BY keyword
+            ORDER BY datetime(last_seen) DESC
+            LIMIT ?
+        """
+        df = pd.read_sql_query(query, conn, params=[limit])
+        conn.close()
+        return df["keyword"].tolist()
+    except Exception as e:
+        print(f"History error: {e}")
+        return []
+
 
 
 # ============================================================
@@ -551,43 +661,63 @@ def build_keyword_plots(df: pd.DataFrame, label: str):
 # ============================================================
 @app.route("/", methods=["GET", "POST"])
 def dashboard():
+    history = get_keyword_history()
+    main = None
+    cmp = None
     keyword = ""
     compare = ""
     msg = None
 
-    history = get_keyword_history()
-    main = {}
-    cmp = {}
-
     if request.method == "POST":
-        kw_input = request.form.get("keyword", "").strip()
-        kw_hist = request.form.get("keyword_history", "").strip()
+        action = request.form.get("action", "load")
 
-        keyword = kw_input or kw_hist
-        compare = request.form.get("compare_keyword", "").strip()
-
-        if compare and compare == keyword:
-            msg = "Compare keyword cannot be the same as main keyword."
+        # --- RESET BUTTON PRESSED ---
+        if action == "reset":
+            reset_db()
+            keyword = ""
             compare = ""
-
-        if not keyword:
-            msg = "Please enter or select a keyword."
+            msg = "All data has been reset."
+            history = []
+            main = None
+            cmp = None
+            # fall through to render_template at the bottom
         else:
-            df = load_data(keyword)
-            if df.empty:
-                msg = f"No data for '{keyword}'. Run scraper first."
-            else:
-                df = prepare_df(df)
-                main = build_keyword_plots(df, keyword)
+            # --- LOAD DATA PRESSED ---
+            kw_input = request.form.get("keyword", "").strip()
+            kw_hist = request.form.get("keyword_history", "").strip()
 
-                if compare:
-                    dfc = load_data(compare)
-                    if dfc.empty:
-                        msg = f"No data for compare keyword '{compare}'."
-                        compare = ""
-                    else:
-                        dfc = prepare_df(dfc)
-                        cmp = build_keyword_plots(dfc, compare)
+            keyword = kw_input or kw_hist
+            compare = request.form.get("compare_keyword", "").strip()
+
+            if compare and compare == keyword:
+                msg = "Compare keyword cannot be the same as main keyword."
+                compare = ""
+
+            if not keyword:
+                msg = "Please enter or select a keyword."
+            else:
+                init_db()
+                # scrape main keyword
+                scrape_keyword(keyword)
+                df = load_data(keyword)
+                if df.empty:
+                    msg = f"No data could be loaded for '{keyword}'."
+                else:
+                    df = prepare_df(df)
+                    main = build_keyword_plots(df, keyword)
+
+                    # scrape compare keyword if provided
+                    if compare:
+                        scrape_keyword(compare)
+                        dfc = load_data(compare)
+                        if dfc.empty:
+                            msg = f"No data for compare keyword '{compare}'."
+                            compare = ""
+                        else:
+                            dfc = prepare_df(dfc)
+                            cmp = build_keyword_plots(dfc, compare)
+
+
 
     return render_template(
         "dashboard.html",

@@ -7,6 +7,12 @@
 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
 
+    <!-- MathJax for nicely rendered formula -->
+    <script src="https://polyfill.io/v3/polyfill.min.js?features=es6"></script>
+    <script id="MathJax-script" async
+        src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js">
+    </script>
+
     {% for css in cdn_css %}
     <link href="{{ css }}" rel="stylesheet" type="text/css">
     {% endfor %}
@@ -26,37 +32,119 @@
         .alert { margin-bottom: 20px; color: #111; background: #ffc107; }
         .plot-title { margin-bottom: 12px; }
         .wordcloud-img { max-width: 100%; height: auto; display:block; margin: 0 auto; }
+        .hotness-card {
+            background-color: #1a1a1a;
+            border-radius: 10px;
+            border: 1px solid #333;
+            padding: 16px 20px;
+            margin: 20px 0 30px 0;
+            color: #e6e6e6;
+        }
+        .hotness-card h3 {
+            margin: 0 0 6px 0;
+            color: #ffd27f;
+            font-size: 1.25rem;
+        }
+        .hotness-card p {
+            margin: 4px 0;
+        }
+        .hotness-card small {
+            color: #bbbbbb;
+        }
+        .welcome-card {
+    background-color: #1a1a1a;
+    border-radius: 10px;
+    border: 1px solid #333;
+    padding: 20px 22px;
+    margin-bottom: 30px;
+    color: #e6e6e6;
+}
+
+.welcome-card h2 {
+    font-size: 1.5rem;
+    margin-bottom: 10px;
+    color: #ffd27f;
+}
+
+.welcome-card p {
+    margin-bottom: 6px;
+    color: #d0d0d0;
+}
+
+.welcome-card ul {
+    margin: 10px 0 0 18px;
+    padding: 0;
+}
+
+.welcome-card li {
+    margin-bottom: 4px;
+}
+
+/* Chart appearance animation */
+.chart-section {
+    opacity: 0;
+    transform: translateY(10px);
+    transition: opacity 0.4s ease-out, transform 0.4s ease-out;
+}
+
+.chart-section.visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
     </style>
 </head>
 <body>
     <div class="container mt-4">
+        <div id="loading-overlay"
+     style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.75);
+            z-index:1050; align-items:center; justify-content:center;">
+    <div class="text-center">
+        <div class="spinner-border text-light mb-3" role="status">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <div>Scraping StackOverflow and updating charts...</div>
+    </div>
+</div>
+
         <h1 class="text-center mb-4">StackOverflow Questions Dashboard</h1>
 
         <!-- Form for Keyword Input -->
-        <div class="form-container">
-            <form method="POST" class="row g-3">
-                <div class="col-md-4">
-                    <label for="keyword" class="form-label">Enter Keyword:</label>
-                    <input type="text" class="form-control" id="keyword" name="keyword" value="{{ keyword }}" placeholder="e.g., python">
-                </div>
-                <div class="col-md-4">
-                    <label for="keyword_history" class="form-label">Or Select from History:</label>
-                    <select class="form-select" id="keyword_history" name="keyword_history">
-                        <option value="">-- Select --</option>
-                        {% for hist in history %}
-                        <option value="{{ hist }}" {% if hist == keyword %}selected{% endif %}>{{ hist }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="col-md-4">
-                    <label for="compare_keyword" class="form-label">Compare with Keyword (optional):</label>
-                    <input type="text" class="form-control" id="compare_keyword" name="compare_keyword" value="{{ compare_keyword }}" placeholder="e.g., javascript">
-                </div>
-                <div class="col-12">
-                    <button type="submit" class="btn btn-primary">Load Data</button>
-                </div>
-            </form>
+<div class="form-container">
+    <form method="POST" class="row g-3" id="main-form">
+        <div class="col-md-4">
+            <label for="keyword" class="form-label">Enter Keyword:</label>
+            <input type="text" class="form-control" id="keyword" name="keyword"
+                   value="{{ keyword }}" placeholder="e.g., python">
         </div>
+        <div class="col-md-4">
+            <label for="keyword_history" class="form-label">Or Select from History:</label>
+            <select class="form-select" id="keyword_history" name="keyword_history">
+                <option value="">-- Select --</option>
+                {% for hist in history %}
+                <option value="{{ hist }}" {% if hist == keyword %}selected{% endif %}>{{ hist }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-4">
+            <label for="compare_keyword" class="form-label">Compare with Keyword (optional):</label>
+            <input type="text" class="form-control" id="compare_keyword" name="compare_keyword"
+                   value="{{ compare_keyword }}" placeholder="e.g., javascript">
+        </div>
+        <div class="col-12 d-flex align-items-center mt-2">
+            <button type="submit" class="btn btn-primary"
+                    name="action" value="load" id="load-btn" disabled>
+                Load Data
+            </button>
+            <button type="submit" class="btn btn-outline-warning ms-2"
+                    name="action" value="reset" id="reset-btn">
+                Reset All Data
+            </button>
+        </div>
+    </form>
+</div>
+
+
 
         <!-- Message Display -->
         {% if msg %}
@@ -64,36 +152,44 @@
             {{ msg }}
         </div>
         {% endif %}
+        {% if not main and not compare_keyword and not msg %}
+<div class="welcome-card">
+    <h2>Welcome 👋</h2>
+    <p>This dashboard lets you explore StackOverflow questions by keyword using a custom <strong>Hotness</strong> metric.</p>
+    <p>To get started:</p>
+    <ul>
+        <li>Enter a keyword such as <code>python</code>, <code>pandas</code>, or <code>docker</code>.</li>
+        <li>Optionally choose a second keyword to compare (e.g. <code>javascript</code>).</li>
+        <li>Press <strong>Load Data</strong> to scrape fresh questions and update the charts.</li>
+    </ul>
+    <p class="mt-2"><small>Tip: The dashboard caches results in a local SQLite database so you can revisit past keywords quickly.</small></p>
+</div>
+{% endif %}
 
-        <!-- NOTE:
-             To avoid duplicate graphs we render the full "main" sections only when
-             there is NO compare_keyword. When compare_keyword is present we render
-             both main and compare inside the comparison layout (side-by-side).
-        -->
 
         <!-- Standalone Main Keyword Plots (shown only when NOT comparing) -->
         {% if main and not compare_keyword %}
         <h2>Analysis for: {{ keyword }}</h2>
 
-        <div class="alert alert-info mt-3">
-            <strong>🔥 Hotness Metric</strong><br>
-            The <em>Hotness</em> score is a composite indicator designed to highlight
-            questions that attract both engagement and community attention:
-            <br><br>
-            <code>
-                Hotness = Score + (2 × Answer Count) + (View Count / 100)
-            </code>
-            <br><br>
+        <!-- Hotness Metric explanation: directly above all Hotness-based graphs -->
+        <div class="hotness-card">
+            <h3>🔥 Hotness Metric</h3>
+            <p>
+                This score highlights questions that combine community approval, discussion,
+                and raw traffic.
+            </p>
+            <p style="font-size: 1.05rem; margin-top: 8px;">
+                $$\text{Hotness} = (\text{Score}) + 2 \times (\text{Answer Count}) + \frac{\text{View Count}}{100}$$
+            </p>
             <small>
-                • <strong>Score</strong>: community upvotes<br>
-                • <strong>Answer Count</strong>: level of discussion (weighted ×2)<br>
-                • <strong>View Count</strong>: normalized popularity signal
-        </small>
+                • <strong>Score</strong> – net upvotes<br>
+                • <strong>Answer Count</strong> – discussion depth (weighted ×2)<br>
+                • <strong>View Count</strong> – popularity signal, scaled down by 100
+            </small>
         </div>
 
-
         {% if main.top_hot %}
-        <div class="plot-section">
+        <div class="plot-section chart-section">
             <h3 class="plot-title">Top Hot Questions</h3>
             <div>{{ main.top_hot.div | safe }}</div>
             {{ main.top_hot.script | safe }}
@@ -101,7 +197,7 @@
         {% endif %}
 
         {% if main.longest %}
-        <div class="plot-section">
+        <div class="plot-section chart-section">
             <h3 class="plot-title">Longest Titles</h3>
             <div>{{ main.longest.div | safe }}</div>
             {{ main.longest.script | safe }}
@@ -109,7 +205,7 @@
         {% endif %}
 
         {% if main.authors %}
-        <div class="plot-section">
+        <div class="plot-section chart-section">
             <h3 class="plot-title">Top Authors</h3>
             <div>{{ main.authors.div | safe }}</div>
             {{ main.authors.script | safe }}
@@ -117,7 +213,7 @@
         {% endif %}
 
         {% if main.hot_rank %}
-        <div class="plot-section">
+        <div class="plot-section chart-section">
             <h3 class="plot-title">Hotness Ranking</h3>
             <div>{{ main.hot_rank.div | safe }}</div>
             {{ main.hot_rank.script | safe }}
@@ -125,7 +221,7 @@
         {% endif %}
 
         {% if main.sentiment %}
-        <div class="plot-section">
+        <div class="plot-section chart-section">
             <h3 class="plot-title">Sentiment vs Hotness</h3>
             <div>{{ main.sentiment.div | safe }}</div>
             {{ main.sentiment.script | safe }}
@@ -133,7 +229,7 @@
         {% endif %}
 
         {% if main.titlelen %}
-        <div class="plot-section">
+        <div class="plot-section chart-section">
             <h3 class="plot-title">Title Length vs Hotness</h3>
             <div>{{ main.titlelen.div | safe }}</div>
             {{ main.titlelen.script | safe }}
@@ -141,7 +237,7 @@
         {% endif %}
 
         {% if main.time_series %}
-        <div class="plot-section">
+        <div class="plot-section chart-section">
             <h3 class="plot-title">Time Series</h3>
             <div>{{ main.time_series.div | safe }}</div>
             {{ main.time_series.script | safe }}
@@ -149,7 +245,7 @@
         {% endif %}
 
         {% if main.tags %}
-        <div class="plot-section">
+        <div class="plot-section chart-section">
             <h3 class="plot-title">Top Tags</h3>
             <div>{{ main.tags.div | safe }}</div>
             {{ main.tags.script | safe }}
@@ -157,7 +253,7 @@
         {% endif %}
 
         {% if main.wordcloud %}
-        <div class="plot-section">
+        <div class="plot-section chart-section">
             <h3 class="plot-title">Word Cloud</h3>
             <img src="data:image/png;base64,{{ main.wordcloud }}" alt="Word Cloud" class="wordcloud-img">
         </div>
@@ -168,8 +264,23 @@
         {% if compare_keyword %}
         <h2 class="mt-5">Comparison: {{ keyword }} vs {{ compare_keyword }}</h2>
 
+        <!-- Same Hotness explanation, also above the Hotness-based comparison graphs -->
+        <div class="hotness-card">
+            <h3>🔥 Hotness Metric</h3>
+            <p>
+                Both sides use the same Hotness definition, so you can compare topics on a
+                like-for-like basis.
+            </p>
+            <p style="font-size: 1.05rem; margin-top: 8px;">
+                $$\text{Hotness} = (\text{Score}) + 2 \times (\text{Answer Count}) + \frac{\text{View Count}}{100}$$
+            </p>
+            <small>
+                Higher Hotness means: strong votes, many answers, and significant views.
+            </small>
+        </div>
+
         <!-- Top Hot Questions (side-by-side) -->
-        <div class="plot-section">
+        <div class="plot-section chart-section">
             <h3 class="plot-title">Top Hot Questions</h3>
             <div class="compare-container">
                 <div class="compare-item">
@@ -194,7 +305,7 @@
         </div>
 
         <!-- Longest Titles -->
-        <div class="plot-section">
+        <div class="plot-section chart-section">
             <h3 class="plot-title">Longest Titles</h3>
             <div class="compare-container">
                 <div class="compare-item">
@@ -215,7 +326,7 @@
         </div>
 
         <!-- Top Authors -->
-        <div class="plot-section">
+        <div class="plot-section chart-section">
             <h3 class="plot-title">Top Authors</h3>
             <div class="compare-container">
                 <div class="compare-item">
@@ -236,7 +347,7 @@
         </div>
 
         <!-- Hotness Ranking -->
-        <div class="plot-section">
+        <div class="plot-section chart-section">
             <h3 class="plot-title">Hotness Ranking</h3>
             <div class="compare-container">
                 <div class="compare-item">
@@ -257,7 +368,7 @@
         </div>
 
         <!-- Sentiment -->
-        <div class="plot-section">
+        <div class="plot-section chart-section">
             <h3 class="plot-title">Sentiment vs Hotness</h3>
             <div class="compare-container">
                 <div class="compare-item">
@@ -278,7 +389,7 @@
         </div>
 
         <!-- Title Length -->
-        <div class="plot-section">
+        <div class="plot-section chart-section">
             <h3 class="plot-title">Title Length vs Hotness</h3>
             <div class="compare-container">
                 <div class="compare-item">
@@ -299,7 +410,7 @@
         </div>
 
         <!-- Time Series -->
-        <div class="plot-section">
+        <div class="plot-section chart-section">
             <h3 class="plot-title">Time Series</h3>
             <div class="compare-container">
                 <div class="compare-item">
@@ -320,7 +431,7 @@
         </div>
 
         <!-- Top Tags -->
-        <div class="plot-section">
+        <div class="plot-section chart-section">
             <h3 class="plot-title">Top Tags</h3>
             <div class="compare-container">
                 <div class="compare-item">
@@ -342,7 +453,7 @@
 
         <!-- Word Clouds (only if both sides have a cloud) -->
         {% if main and main.wordcloud and compare and compare.wordcloud %}
-        <div class="plot-section">
+        <div class="plot-section chart-section">
             <h3 class="plot-title">Word Clouds</h3>
             <div class="compare-container">
                 <div class="compare-item">
@@ -361,7 +472,54 @@
 
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const form = document.getElementById('main-form');
+    const overlay = document.getElementById('loading-overlay');
+    const loadBtn = document.getElementById('load-btn');
+    const keywordInput = document.getElementById('keyword');
+    const historySelect = document.getElementById('keyword_history');
+
+    // --- Enable/disable Load button based on keyword / history ---
+    function updateLoadButtonState() {
+        const kw = keywordInput ? keywordInput.value.trim() : "";
+        const hist = historySelect ? historySelect.value.trim() : "";
+        const hasMainKeyword = kw.length > 0 || hist.length > 0;
+
+        if (loadBtn) {
+            loadBtn.disabled = !hasMainKeyword;
+        }
+    }
+
+    if (keywordInput) {
+        keywordInput.addEventListener('input', updateLoadButtonState);
+    }
+    if (historySelect) {
+        historySelect.addEventListener('change', updateLoadButtonState);
+    }
+
+    // Run once on page load in case a value is prefilled
+    updateLoadButtonState();
+
+    // --- Show overlay on any form submit (load or reset) ---
+    if (form && overlay) {
+        form.addEventListener('submit', function () {
+            overlay.style.display = 'flex';
+        });
+    }
+
+    // --- Animate charts on appearance ---
+    const charts = document.querySelectorAll('.chart-section');
+    charts.forEach((el, idx) => {
+        // staggered appearance
+        setTimeout(() => {
+            el.classList.add('visible');
+        }, 80 * idx);
+    });
+});
+</script>
 </body>
 </html>
- 
+
