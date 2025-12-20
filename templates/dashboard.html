@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>StackOverflow Dashboard</title>
+
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    {% for css in cdn_css %}
+    <link href="{{ css }}" rel="stylesheet" type="text/css">
+    {% endfor %}
+
+    {% for js in cdn_js %}
+    <script src="{{ js }}"></script>
+    {% endfor %}
+
+    <style>
+        body { background-color: #111111; color: #ffffff; font-family: Arial, sans-serif; }
+        .container { max-width: 1200px; }
+        .form-container { background-color: #222222; padding: 20px; border-radius: 10px; margin-bottom: 20px; }
+        .plot-section { margin-bottom: 50px; }
+        .bk-root { margin: 0 auto; max-width: 100%; }
+        .compare-container { display: flex; flex-wrap: wrap; gap: 20px; }
+        .compare-item { flex: 1; min-width: 300px; }
+        .alert { margin-bottom: 20px; color: #111; background: #ffc107; }
+        .plot-title { margin-bottom: 12px; }
+        .wordcloud-img { max-width: 100%; height: auto; display:block; margin: 0 auto; }
+    </style>
+</head>
+<body>
+    <div class="container mt-4">
+        <h1 class="text-center mb-4">StackOverflow Questions Dashboard</h1>
+
+        <!-- Form for Keyword Input -->
+        <div class="form-container">
+            <form method="POST" class="row g-3">
+                <div class="col-md-4">
+                    <label for="keyword" class="form-label">Enter Keyword:</label>
+                    <input type="text" class="form-control" id="keyword" name="keyword" value="{{ keyword }}" placeholder="e.g., python">
+                </div>
+                <div class="col-md-4">
+                    <label for="keyword_history" class="form-label">Or Select from History:</label>
+                    <select class="form-select" id="keyword_history" name="keyword_history">
+                        <option value="">-- Select --</option>
+                        {% for hist in history %}
+                        <option value="{{ hist }}" {% if hist == keyword %}selected{% endif %}>{{ hist }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label for="compare_keyword" class="form-label">Compare with Keyword (optional):</label>
+                    <input type="text" class="form-control" id="compare_keyword" name="compare_keyword" value="{{ compare_keyword }}" placeholder="e.g., javascript">
+                </div>
+                <div class="col-12">
+                    <button type="submit" class="btn btn-primary">Load Data</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Message Display -->
+        {% if msg %}
+        <div class="alert" role="alert">
+            {{ msg }}
+        </div>
+        {% endif %}
+
+        <!-- NOTE:
+             To avoid duplicate graphs we render the full "main" sections only when
+             there is NO compare_keyword. When compare_keyword is present we render
+             both main and compare inside the comparison layout (side-by-side).
+        -->
+
+        <!-- Standalone Main Keyword Plots (shown only when NOT comparing) -->
+        {% if main and not compare_keyword %}
+        <h2>Analysis for: {{ keyword }}</h2>
+
+        <div class="alert alert-info mt-3">
+            <strong>🔥 Hotness Metric</strong><br>
+            The <em>Hotness</em> score is a composite indicator designed to highlight
+            questions that attract both engagement and community attention:
+            <br><br>
+            <code>
+                Hotness = Score + (2 × Answer Count) + (View Count / 100)
+            </code>
+            <br><br>
+            <small>
+                • <strong>Score</strong>: community upvotes<br>
+                • <strong>Answer Count</strong>: level of discussion (weighted ×2)<br>
+                • <strong>View Count</strong>: normalized popularity signal
+        </small>
+        </div>
+
+
+        {% if main.top_hot %}
+        <div class="plot-section">
+            <h3 class="plot-title">Top Hot Questions</h3>
+            <div>{{ main.top_hot.div | safe }}</div>
+            {{ main.top_hot.script | safe }}
+        </div>
+        {% endif %}
+
+        {% if main.longest %}
+        <div class="plot-section">
+            <h3 class="plot-title">Longest Titles</h3>
+            <div>{{ main.longest.div | safe }}</div>
+            {{ main.longest.script | safe }}
+        </div>
+        {% endif %}
+
+        {% if main.authors %}
+        <div class="plot-section">
+            <h3 class="plot-title">Top Authors</h3>
+            <div>{{ main.authors.div | safe }}</div>
+            {{ main.authors.script | safe }}
+        </div>
+        {% endif %}
+
+        {% if main.hot_rank %}
+        <div class="plot-section">
+            <h3 class="plot-title">Hotness Ranking</h3>
+            <div>{{ main.hot_rank.div | safe }}</div>
+            {{ main.hot_rank.script | safe }}
+        </div>
+        {% endif %}
+
+        {% if main.sentiment %}
+        <div class="plot-section">
+            <h3 class="plot-title">Sentiment vs Hotness</h3>
+            <div>{{ main.sentiment.div | safe }}</div>
+            {{ main.sentiment.script | safe }}
+        </div>
+        {% endif %}
+
+        {% if main.titlelen %}
+        <div class="plot-section">
+            <h3 class="plot-title">Title Length vs Hotness</h3>
+            <div>{{ main.titlelen.div | safe }}</div>
+            {{ main.titlelen.script | safe }}
+        </div>
+        {% endif %}
+
+        {% if main.time_series %}
+        <div class="plot-section">
+            <h3 class="plot-title">Time Series</h3>
+            <div>{{ main.time_series.div | safe }}</div>
+            {{ main.time_series.script | safe }}
+        </div>
+        {% endif %}
+
+        {% if main.tags %}
+        <div class="plot-section">
+            <h3 class="plot-title">Top Tags</h3>
+            <div>{{ main.tags.div | safe }}</div>
+            {{ main.tags.script | safe }}
+        </div>
+        {% endif %}
+
+        {% if main.wordcloud %}
+        <div class="plot-section">
+            <h3 class="plot-title">Word Cloud</h3>
+            <img src="data:image/png;base64,{{ main.wordcloud }}" alt="Word Cloud" class="wordcloud-img">
+        </div>
+        {% endif %}
+        {% endif %}
+
+        <!-- Compare Keyword Plots (renders both sides; main is included here as left column) -->
+        {% if compare_keyword %}
+        <h2 class="mt-5">Comparison: {{ keyword }} vs {{ compare_keyword }}</h2>
+
+        <!-- Top Hot Questions (side-by-side) -->
+        <div class="plot-section">
+            <h3 class="plot-title">Top Hot Questions</h3>
+            <div class="compare-container">
+                <div class="compare-item">
+                    <h4>{{ keyword }}</h4>
+                    {% if main and main.top_hot %}
+                    <div>{{ main.top_hot.div | safe }}</div>
+                    {{ main.top_hot.script | safe }}
+                    {% else %}
+                    <div class="text-muted">No data for {{ keyword }}</div>
+                    {% endif %}
+                </div>
+                <div class="compare-item">
+                    <h4>{{ compare_keyword }}</h4>
+                    {% if compare and compare.top_hot %}
+                    <div>{{ compare.top_hot.div | safe }}</div>
+                    {{ compare.top_hot.script | safe }}
+                    {% else %}
+                    <div class="text-muted">No data for {{ compare_keyword }}</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Longest Titles -->
+        <div class="plot-section">
+            <h3 class="plot-title">Longest Titles</h3>
+            <div class="compare-container">
+                <div class="compare-item">
+                    <h4>{{ keyword }}</h4>
+                    {% if main and main.longest %}
+                    <div>{{ main.longest.div | safe }}</div>
+                    {{ main.longest.script | safe }}
+                    {% endif %}
+                </div>
+                <div class="compare-item">
+                    <h4>{{ compare_keyword }}</h4>
+                    {% if compare and compare.longest %}
+                    <div>{{ compare.longest.div | safe }}</div>
+                    {{ compare.longest.script | safe }}
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Top Authors -->
+        <div class="plot-section">
+            <h3 class="plot-title">Top Authors</h3>
+            <div class="compare-container">
+                <div class="compare-item">
+                    <h4>{{ keyword }}</h4>
+                    {% if main and main.authors %}
+                    <div>{{ main.authors.div | safe }}</div>
+                    {{ main.authors.script | safe }}
+                    {% endif %}
+                </div>
+                <div class="compare-item">
+                    <h4>{{ compare_keyword }}</h4>
+                    {% if compare and compare.authors %}
+                    <div>{{ compare.authors.div | safe }}</div>
+                    {{ compare.authors.script | safe }}
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Hotness Ranking -->
+        <div class="plot-section">
+            <h3 class="plot-title">Hotness Ranking</h3>
+            <div class="compare-container">
+                <div class="compare-item">
+                    <h4>{{ keyword }}</h4>
+                    {% if main and main.hot_rank %}
+                    <div>{{ main.hot_rank.div | safe }}</div>
+                    {{ main.hot_rank.script | safe }}
+                    {% endif %}
+                </div>
+                <div class="compare-item">
+                    <h4>{{ compare_keyword }}</h4>
+                    {% if compare and compare.hot_rank %}
+                    <div>{{ compare.hot_rank.div | safe }}</div>
+                    {{ compare.hot_rank.script | safe }}
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Sentiment -->
+        <div class="plot-section">
+            <h3 class="plot-title">Sentiment vs Hotness</h3>
+            <div class="compare-container">
+                <div class="compare-item">
+                    <h4>{{ keyword }}</h4>
+                    {% if main and main.sentiment %}
+                    <div>{{ main.sentiment.div | safe }}</div>
+                    {{ main.sentiment.script | safe }}
+                    {% endif %}
+                </div>
+                <div class="compare-item">
+                    <h4>{{ compare_keyword }}</h4>
+                    {% if compare and compare.sentiment %}
+                    <div>{{ compare.sentiment.div | safe }}</div>
+                    {{ compare.sentiment.script | safe }}
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Title Length -->
+        <div class="plot-section">
+            <h3 class="plot-title">Title Length vs Hotness</h3>
+            <div class="compare-container">
+                <div class="compare-item">
+                    <h4>{{ keyword }}</h4>
+                    {% if main and main.titlelen %}
+                    <div>{{ main.titlelen.div | safe }}</div>
+                    {{ main.titlelen.script | safe }}
+                    {% endif %}
+                </div>
+                <div class="compare-item">
+                    <h4>{{ compare_keyword }}</h4>
+                    {% if compare and compare.titlelen %}
+                    <div>{{ compare.titlelen.div | safe }}</div>
+                    {{ compare.titlelen.script | safe }}
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Time Series -->
+        <div class="plot-section">
+            <h3 class="plot-title">Time Series</h3>
+            <div class="compare-container">
+                <div class="compare-item">
+                    <h4>{{ keyword }}</h4>
+                    {% if main and main.time_series %}
+                    <div>{{ main.time_series.div | safe }}</div>
+                    {{ main.time_series.script | safe }}
+                    {% endif %}
+                </div>
+                <div class="compare-item">
+                    <h4>{{ compare_keyword }}</h4>
+                    {% if compare and compare.time_series %}
+                    <div>{{ compare.time_series.div | safe }}</div>
+                    {{ compare.time_series.script | safe }}
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Top Tags -->
+        <div class="plot-section">
+            <h3 class="plot-title">Top Tags</h3>
+            <div class="compare-container">
+                <div class="compare-item">
+                    <h4>{{ keyword }}</h4>
+                    {% if main and main.tags %}
+                    <div>{{ main.tags.div | safe }}</div>
+                    {{ main.tags.script | safe }}
+                    {% endif %}
+                </div>
+                <div class="compare-item">
+                    <h4>{{ compare_keyword }}</h4>
+                    {% if compare and compare.tags %}
+                    <div>{{ compare.tags.div | safe }}</div>
+                    {{ compare.tags.script | safe }}
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Word Clouds (only if both sides have a cloud) -->
+        {% if main and main.wordcloud and compare and compare.wordcloud %}
+        <div class="plot-section">
+            <h3 class="plot-title">Word Clouds</h3>
+            <div class="compare-container">
+                <div class="compare-item">
+                    <h4>{{ keyword }}</h4>
+                    <img src="data:image/png;base64,{{ main.wordcloud }}" alt="Word Cloud" class="wordcloud-img">
+                </div>
+                <div class="compare-item">
+                    <h4>{{ compare_keyword }}</h4>
+                    <img src="data:image/png;base64,{{ compare.wordcloud }}" alt="Word Cloud" class="wordcloud-img">
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        {% endif %} <!-- end compare_keyword check -->
+
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
+ 

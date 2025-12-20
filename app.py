@@ -13,7 +13,8 @@ from bokeh.plotting import figure
 from bokeh.models import ColumnDataSource, HoverTool, TapTool, OpenURL
 from bokeh.transform import linear_cmap
 from bokeh.palettes import Oranges256, Blues256, Purples256, Viridis256
-
+from bokeh.resources import CDN
+import os 
 DB_PATH = "data/stack_questions.db"
 
 app = Flask(__name__)
@@ -27,6 +28,7 @@ def load_data(keyword: str) -> pd.DataFrame:
     query = "SELECT * FROM questions WHERE keyword = ?"
     df = pd.read_sql_query(query, conn, params=[keyword])
     conn.close()
+    df = df.drop_duplicates(subset=['url'])
     return df
 
 
@@ -153,7 +155,8 @@ def bokeh_top_hot(df_hot, label):
     p = figure(
         y_range=list(df["ShortShort"]),
         height=350,
-        width=900,
+        width=800,
+        sizing_mode='scale_width',
         title=f"🔥 Top 5 Hottest Questions — {label}",
         toolbar_location=None,
     )
@@ -203,7 +206,8 @@ def bokeh_longest_titles(df_hot, label):
     p = figure(
         y_range=list(df["ShortShort"]),
         height=350,
-        width=900,
+        width=800,
+        sizing_mode='scale_width',
         title=f"📏 Top 5 Longest Titles — {label}",
         toolbar_location=None,
     )
@@ -250,8 +254,9 @@ def bokeh_hotness_ranking(df_hot, label):
 
     p = figure(
         y_range=list(df["ShortShort"]),
-        height=750,
-        width=900,
+        height=600,
+        width=800,
+        sizing_mode='scale_width',
         title=f"🔥 Hotness Ranking (Top 15) — {label}",
         toolbar_location="above",
         tools="pan,wheel_zoom,reset",
@@ -303,7 +308,8 @@ def bokeh_authors(df_hot, label):
     p = figure(
         y_range=list(df["Author"]),
         height=350,
-        width=600,
+        width=800,
+        sizing_mode='scale_width',
         title=f"👤 Top 5 Authors — {label}",
         toolbar_location=None,
     )
@@ -337,8 +343,9 @@ def bokeh_sentiment_vs_hotness(df_hot, label):
     source = ColumnDataSource(df_hot)
 
     p = figure(
-        height=450,
-        width=900,
+        height=400,
+        width=800,
+        sizing_mode='scale_width',
         title=f"😊 Sentiment vs Hotness — {label}",
         toolbar_location="above",
         tools="pan,wheel_zoom,reset",
@@ -387,8 +394,9 @@ def bokeh_titlelen_vs_hotness(df_hot, label):
     source = ColumnDataSource(df_hot)
 
     p = figure(
-        height=450,
-        width=900,
+        height=400,
+        width=800,
+        sizing_mode='scale_width',
         title=f"📏 Title Length vs Hotness — {label}",
         toolbar_location="above",
         tools="pan,wheel_zoom,reset",
@@ -441,7 +449,8 @@ def bokeh_time_series(df_hot, label):
 
     p = figure(
         height=400,
-        width=900,
+        width=800,
+        sizing_mode='scale_width',
         title=f"📅 Questions Over Time — {label}",
         x_axis_type="datetime",
         toolbar_location="above",
@@ -479,7 +488,8 @@ def bokeh_tags(df_hot, label):
     p = figure(
         x_range=list(counts["Tag"]),
         height=350,
-        width=900,
+        width=800,
+        sizing_mode='scale_width',
         title=f"🏷️ Top 10 Tags — {label}",
         toolbar_location="above",
         tools="pan,wheel_zoom,reset",
@@ -556,6 +566,10 @@ def dashboard():
         keyword = kw_input or kw_hist
         compare = request.form.get("compare_keyword", "").strip()
 
+        if compare and compare == keyword:
+            msg = "Compare keyword cannot be the same as main keyword."
+            compare = ""
+
         if not keyword:
             msg = "Please enter or select a keyword."
         else:
@@ -583,6 +597,8 @@ def dashboard():
         history=history,
         main=main,
         compare=cmp,
+        cdn_css=CDN.css_files,
+        cdn_js=CDN.js_files,
     )
 
 
@@ -590,4 +606,6 @@ def dashboard():
 # RUN FLASK
 # ============================================================
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(host="0.0.0.0", port=5000, debug=True)
+
+ 

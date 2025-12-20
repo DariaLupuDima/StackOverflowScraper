@@ -1,8 +1,8 @@
-requests
+flask
 pandas
+numpy
+requests
 textblob
 wordcloud
 matplotlib
-numpy
-plotly
-
+bokeh
